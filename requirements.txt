@@ -9,3 +9,8 @@ openai
 pillow
 azure-ai-vision-face==1.0.0b2
 compreface-sdk
+deepface
+tf-keras
+boto3
+botocore
+python-dotenv

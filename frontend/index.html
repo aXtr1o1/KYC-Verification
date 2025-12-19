@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Face Comparison Tool</title>
+    <title>AWS Rekognition Face Verification</title>
     <style>
         * {
             margin: 0;
@@ -203,7 +203,7 @@
             border: 1px solid #ddd;
             border-radius: 6px;
             font-size: 14px;
-            width: 120px;
+            width: 150px;
         }
 
         .config-input:focus {
@@ -267,6 +267,7 @@
             border-radius: 10px;
             text-align: center;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            position: relative;
         }
 
         .stat-value {
@@ -274,6 +275,7 @@
             font-weight: 700;
             color: #667eea;
             margin-bottom: 5px;
+            word-break: break-all;
         }
 
         .stat-label {
@@ -283,70 +285,20 @@
             letter-spacing: 0.5px;
         }
 
-        .comparison-list {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
 
-        .comparison-item {
+
+        .conclusion-box {
             background: white;
             padding: 20px;
             border-radius: 10px;
+            text-align: center;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
 
-        .comparison-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .comparison-title {
-            font-weight: 600;
+        .conclusion-text {
+            font-size: 16px;
             color: #333;
-        }
-
-        .comparison-badge {
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .comparison-badge.match {
-            background: #d1fae5;
-            color: #065f46;
-        }
-
-        .comparison-badge.no-match {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-        .comparison-details {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 15px;
-            margin-top: 15px;
-        }
-
-        .detail-item {
-            text-align: center;
-        }
-
-        .detail-value {
-            font-size: 20px;
-            font-weight: 600;
-            color: #667eea;
-            margin-bottom: 5px;
-        }
-
-        .detail-label {
-            font-size: 11px;
-            color: #666;
-            text-transform: uppercase;
+            font-weight: 500;
         }
 
         .loading {
@@ -387,27 +339,6 @@
             display: block;
         }
 
-        .api-config {
-            margin-top: 20px;
-            padding: 20px;
-            background: #f9fafb;
-            border-radius: 8px;
-            display: none;
-        }
-
-        .api-config.active {
-            display: block;
-        }
-
-        .api-input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            margin-top: 8px;
-            font-size: 14px;
-        }
-
         @media (max-width: 768px) {
             .upload-section {
                 grid-template-columns: 1fr;
@@ -421,106 +352,89 @@
             .config-input {
                 width: 100%;
             }
+
+
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Face Comparison Tool</h1>
-        <p class="subtitle">Upload a reference image and cropped faces to compare</p>
+        <h1>🔍 AWS Rekognition Face Verification</h1>
+        <p class="subtitle">Upload two images to verify if they contain the same person</p>
 
         <div class="upload-section">
-            <!-- Reference Image Upload -->
-            <div class="upload-box" id="referenceBox">
-                <label class="upload-label" for="referenceImage">Reference Image</label>
-                <input type="file" id="referenceImage" class="upload-input" accept="image/*">
-                <button class="upload-button" onclick="document.getElementById('referenceImage').click()">
-                    Choose Reference Image
+            <div class="upload-box" id="faceBox">
+                <label class="upload-label" for="faceImage">Face Image (Source)</label>
+                <input type="file" id="faceImage" class="upload-input" accept="image/*">
+                <button class="upload-button" onclick="document.getElementById('faceImage').click()">
+                    Choose Face Image
                 </button>
-                <div class="preview-container" id="referencePreview">
-                    <img class="preview-image" id="referencePreviewImg" alt="Reference preview">
-                    <div class="preview-info" id="referenceInfo"></div>
-                    <button class="remove-btn" onclick="removeImage('reference')">Remove</button>
+                <div class="preview-container" id="facePreview">
+                    <img class="preview-image" id="facePreviewImg" alt="Face preview">
+                    <div class="preview-info" id="faceInfo"></div>
+                    <button class="remove-btn" onclick="removeImage('face')">Remove</button>
                 </div>
             </div>
 
-            <!-- Cropped Faces Upload -->
-            <div class="upload-box" id="facesBox">
-                <label class="upload-label" for="croppedFaces">Cropped Face Images</label>
-                <input type="file" id="croppedFaces" class="upload-input" accept="image/*" multiple>
-                <button class="upload-button" onclick="document.getElementById('croppedFaces').click()">
-                    Choose Face Images
+            <div class="upload-box" id="idBox">
+                <label class="upload-label" for="idImage">ID Image (Target)</label>
+                <input type="file" id="idImage" class="upload-input" accept="image/*">
+                <button class="upload-button" onclick="document.getElementById('idImage').click()">
+                    Choose ID Image
                 </button>
-                <div class="preview-container" id="facesPreview">
-                    <div id="facesList"></div>
+                <div class="preview-container" id="idPreview">
+                    <img class="preview-image" id="idPreviewImg" alt="ID preview">
+                    <div class="preview-info" id="idInfo"></div>
+                    <button class="remove-btn" onclick="removeImage('id')">Remove</button>
                 </div>
             </div>
         </div>
 
-        <!-- Configuration -->
         <div class="compare-section">
             <div class="config-section">
                 <div class="config-item">
-                    <label class="config-label">Tolerance</label>
-                    <input type="number" class="config-input" id="tolerance" value="0.5" min="0.1" max="1.0" step="0.1">
-                </div>
-                <div class="config-item">
-                    <label class="config-label">Threshold</label>
-                    <input type="number" class="config-input" id="threshold" value="0.8" min="0.1" max="1.0" step="0.1">
+                    <label class="config-label">Similarity Threshold (%)</label>
+                    <input type="number" class="config-input" id="threshold" value="80" min="0" max="100" step="1">
                 </div>
             </div>
 
             <button class="compare-button" id="compareButton" onclick="compareFaces()" disabled>
-                Compare Faces
+                Verify Faces
             </button>
 
             <div class="loading" id="loading">
                 <div class="spinner"></div>
-                <p style="margin-top: 15px; color: #666;">Processing comparison...</p>
+                <p style="margin-top: 15px; color: #666;">Verifying faces with AWS Rekognition...</p>
             </div>
 
             <div class="error-message" id="errorMessage"></div>
         </div>
 
-        <!-- Results -->
         <div class="results-section" id="resultsSection">
             <div class="result-header">
-                <h2 class="result-title">Comparison Results</h2>
+                <h2 class="result-title">Verification Results</h2>
                 <div class="result-match" id="overallMatch"></div>
             </div>
 
             <div class="result-stats" id="resultStats"></div>
 
-            <div class="comparison-list" id="comparisonList"></div>
-        </div>
-
-        <!-- API Configuration (Hidden by default) -->
-        <div class="api-config" id="apiConfig">
-            <label style="font-weight: 600; color: #333; display: block; margin-bottom: 8px;">
-                API Endpoint URL
-            </label>
-            <input type="text" class="api-input" id="apiUrl" 
-                   placeholder="http://localhost:7071/api" 
-                   value="http://localhost:7071/api">
+            <div class="conclusion-box">
+                <div class="conclusion-text" id="conclusionText"></div>
+            </div>
         </div>
     </div>
 
     <script>
-        // Default API URL
-        let apiUrl = 'http://localhost:7071/api';
-
-        // Initialize file inputs
-        document.getElementById('referenceImage').addEventListener('change', function(e) {
-            handleFileSelect(e, 'reference');
+        document.getElementById('faceImage').addEventListener('change', function(e) {
+            handleFileSelect(e, 'face');
         });
 
-        document.getElementById('croppedFaces').addEventListener('change', function(e) {
-            handleFileSelect(e, 'faces');
+        document.getElementById('idImage').addEventListener('change', function(e) {
+            handleFileSelect(e, 'id');
         });
 
-        // Drag and drop handlers
-        setupDragAndDrop('referenceBox', 'reference');
-        setupDragAndDrop('facesBox', 'faces');
+        setupDragAndDrop('faceBox', 'face');
+        setupDragAndDrop('idBox', 'id');
 
         function setupDragAndDrop(boxId, type) {
             const box = document.getElementById(boxId);
@@ -538,19 +452,12 @@
                 e.preventDefault();
                 box.classList.remove('dragover');
                 
-                const files = type === 'reference' 
-                    ? [e.dataTransfer.files[0]]
-                    : Array.from(e.dataTransfer.files);
-                
-                if (type === 'reference') {
-                    document.getElementById('referenceImage').files = e.dataTransfer.files;
-                    handleFileSelect({ target: { files: e.dataTransfer.files } }, 'reference');
-                } else {
-                    const input = document.getElementById('croppedFaces');
-                    const dt = new DataTransfer();
-                    files.forEach(file => dt.items.add(file));
-                    input.files = dt.files;
-                    handleFileSelect({ target: { files: dt.files } }, 'faces');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    const inputId = type === 'face' ? 'faceImage' : 'idImage';
+                    const input = document.getElementById(inputId);
+                    input.files = files;
+                    handleFileSelect({ target: { files: files } }, type);
                 }
             });
         }
@@ -559,77 +466,44 @@
             const files = event.target.files;
             if (!files || files.length === 0) return;
 
-            if (type === 'reference') {
-                const file = files[0];
-                const preview = document.getElementById('referencePreview');
-                const previewImg = document.getElementById('referencePreviewImg');
-                const info = document.getElementById('referenceInfo');
-                const box = document.getElementById('referenceBox');
+            const file = files[0];
+            const preview = document.getElementById(`${type}Preview`);
+            const previewImg = document.getElementById(`${type}PreviewImg`);
+            const info = document.getElementById(`${type}Info`);
+            const box = document.getElementById(`${type}Box`);
 
-                previewImg.src = URL.createObjectURL(file);
-                info.textContent = `${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
-                preview.classList.add('active');
-                box.classList.add('has-image');
-                updateCompareButton();
-            } else {
-                const preview = document.getElementById('facesPreview');
-                const facesList = document.getElementById('facesList');
-                const box = document.getElementById('facesBox');
-                
-                facesList.innerHTML = '';
-                Array.from(files).forEach((file, index) => {
-                    const div = document.createElement('div');
-                    div.style.marginBottom = '15px';
-                    div.innerHTML = `
-                        <img class="preview-image" src="${URL.createObjectURL(file)}" alt="Face ${index + 1}">
-                        <div class="preview-info">${file.name} (${(file.size / 1024).toFixed(2)} KB)</div>
-                    `;
-                    facesList.appendChild(div);
-                });
-                
-                preview.classList.add('active');
-                box.classList.add('has-image');
-                updateCompareButton();
-            }
+            previewImg.src = URL.createObjectURL(file);
+            info.textContent = `${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
+            preview.classList.add('active');
+            box.classList.add('has-image');
+            updateCompareButton();
         }
 
         function removeImage(type) {
-            if (type === 'reference') {
-                document.getElementById('referenceImage').value = '';
-                document.getElementById('referencePreview').classList.remove('active');
-                document.getElementById('referenceBox').classList.remove('has-image');
-            } else {
-                document.getElementById('croppedFaces').value = '';
-                document.getElementById('facesPreview').classList.remove('active');
-                document.getElementById('facesBox').classList.remove('has-image');
-                document.getElementById('facesList').innerHTML = '';
-            }
+            const inputId = type === 'face' ? 'faceImage' : 'idImage';
+            document.getElementById(inputId).value = '';
+            document.getElementById(`${type}Preview`).classList.remove('active');
+            document.getElementById(`${type}Box`).classList.remove('has-image');
             updateCompareButton();
         }
 
         function updateCompareButton() {
-            const referenceFile = document.getElementById('referenceImage').files.length > 0;
-            const facesFiles = document.getElementById('croppedFaces').files.length > 0;
-            document.getElementById('compareButton').disabled = !(referenceFile && facesFiles);
+            const faceFile = document.getElementById('faceImage').files.length > 0;
+            const idFile = document.getElementById('idImage').files.length > 0;
+            document.getElementById('compareButton').disabled = !(faceFile && idFile);
         }
 
         async function compareFaces() {
-            const referenceFile = document.getElementById('referenceImage').files[0];
-            const facesFiles = document.getElementById('croppedFaces').files;
-            const tolerance = document.getElementById('tolerance').value;
+            const faceFile = document.getElementById('faceImage').files[0];
+            const idFile = document.getElementById('idImage').files[0];
             const threshold = document.getElementById('threshold').value;
-            const apiUrlInput = document.getElementById('apiUrl').value;
+            const apiUrl = 'http://localhost:7071/api';
 
-            if (apiUrlInput) {
-                apiUrl = apiUrlInput;
-            }
-
-            if (!referenceFile || facesFiles.length === 0) {
-                showError('Please upload both reference image and at least one face image.');
+            if (!faceFile || !idFile) {
+                showError('Please upload both face and ID images.');
                 return;
             }
 
-            // Show loading
             document.getElementById('loading').classList.add('active');
             document.getElementById('errorMessage').classList.remove('active');
             document.getElementById('resultsSection').classList.remove('active');
@@ -637,28 +511,27 @@
 
             try {
                 const formData = new FormData();
-                formData.append('reference_image', referenceFile);
-                
-                // Add all face files
-                Array.from(facesFiles).forEach(file => {
-                    formData.append('cropped_face_files', file);
-                });
-                
-                formData.append('tolerance', tolerance);
-                formData.append('threshold', threshold);
+                formData.append('face_image', faceFile);
+                formData.append('id_image', idFile);
+                formData.append('similarity_threshold', threshold);
 
-                const response = await fetch(`${apiUrl}/compare_faces`, {
+                const response = await fetch(`${apiUrl}/verify_rekognition`, {
                     method: 'POST',
                     body: formData
                 });
 
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(errorText || `HTTP error! status: ${response.status}`);
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error occurred' }));
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
                 }
 
                 const result = await response.json();
-                displayResults(result);
+                
+                if (result.success) {
+                    displayResults(result);
+                } else {
+                    throw new Error(result.error || 'Verification failed');
+                }
 
             } catch (error) {
                 showError(`Error: ${error.message}`);
@@ -672,74 +545,50 @@
             const resultsSection = document.getElementById('resultsSection');
             const overallMatch = document.getElementById('overallMatch');
             const resultStats = document.getElementById('resultStats');
-            const comparisonList = document.getElementById('comparisonList');
+            const conclusionText = document.getElementById('conclusionText');
 
-            // Overall match
             overallMatch.textContent = result.overall_match ? '✓ Match Found' : '✗ No Match';
             overallMatch.className = `result-match ${result.overall_match}`;
 
-            // Stats
+            // Extract similarity and confidence - always show them
+            let similarity = 'N/A';
+            let confidence = 'N/A';
+
+            if (result.best_match) {
+                similarity = result.best_match.similarity;
+                confidence = result.best_match.confidence;
+            } else if (result.aws_raw_response) {
+                // Even if no match above threshold, check if there's any data
+                if (result.aws_raw_response.FaceMatches && result.aws_raw_response.FaceMatches.length > 0) {
+                    similarity = result.aws_raw_response.FaceMatches[0].Similarity.toFixed(2);
+                } else if (result.aws_raw_response.UnmatchedFaces && result.aws_raw_response.UnmatchedFaces.length > 0) {
+                    // If there are unmatched faces, show 0 or very low similarity
+                    similarity = '0.00';
+                }
+                if (result.aws_raw_response.SourceImageFace) {
+                    confidence = result.aws_raw_response.SourceImageFace.Confidence.toFixed(2);
+                }
+            }
+            
+            // Log the raw response for debugging
+            console.log('AWS Raw Response:', result.aws_raw_response);
+
             resultStats.innerHTML = `
                 <div class="stat-card">
-                    <div class="stat-value">${(result.average_confidence * 100).toFixed(1)}%</div>
-                    <div class="stat-label">Confidence</div>
+                    <div class="stat-value">${similarity}${similarity !== 'N/A' ? '%' : ''}</div>
+                    <div class="stat-label">Similarity Score</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value">${result.summary.faces_found}</div>
-                    <div class="stat-label">Faces Found</div>
+                    <div class="stat-value">${confidence}${confidence !== 'N/A' ? '%' : ''}</div>
+                    <div class="stat-label">Face Confidence</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value">${result.summary.matches}</div>
-                    <div class="stat-label">Matches</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${result.summary.total_faces}</div>
-                    <div class="stat-label">Total Faces</div>
+                    <div class="stat-value">${result.similarity_threshold}%</div>
+                    <div class="stat-label">Threshold Used</div>
                 </div>
             `;
 
-            // Comparisons
-            comparisonList.innerHTML = '';
-            result.comparisons.forEach((comparison, index) => {
-                const item = document.createElement('div');
-                item.className = 'comparison-item';
-                
-                if (comparison.face_found) {
-                    item.innerHTML = `
-                        <div class="comparison-header">
-                            <span class="comparison-title">Face ${comparison.face_index}</span>
-                            <span class="comparison-badge ${comparison.match ? 'match' : 'no-match'}">
-                                ${comparison.match ? '✓ Match' : '✗ No Match'}
-                            </span>
-                        </div>
-                        <div class="comparison-details">
-                            <div class="detail-item">
-                                <div class="detail-value">${(comparison.confidence * 100).toFixed(1)}%</div>
-                                <div class="detail-label">Confidence</div>
-                            </div>
-                            <div class="detail-item">
-                                <div class="detail-value">${comparison.face_distance.toFixed(4)}</div>
-                                <div class="detail-label">Distance</div>
-                            </div>
-                            <div class="detail-item">
-                                <div class="detail-value">${comparison.meets_threshold ? 'Yes' : 'No'}</div>
-                                <div class="detail-label">Meets Threshold</div>
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    item.innerHTML = `
-                        <div class="comparison-header">
-                            <span class="comparison-title">Face ${comparison.face_index}</span>
-                            <span class="comparison-badge no-match">No Face Found</span>
-                        </div>
-                        <p style="color: #666; margin-top: 10px;">${comparison.error || 'No face detected in image'}</p>
-                    `;
-                }
-                
-                comparisonList.appendChild(item);
-            });
-
+            conclusionText.textContent = result.conclusion;
             resultsSection.classList.add('active');
         }
 
@@ -748,14 +597,6 @@
             errorDiv.textContent = message;
             errorDiv.classList.add('active');
         }
-
-        // Allow showing API config with Ctrl+Shift+A
-        document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey && e.shiftKey && e.key === 'A') {
-                document.getElementById('apiConfig').classList.toggle('active');
-            }
-        });
     </script>
 </body>
 </html>
-

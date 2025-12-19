@@ -54,7 +54,6 @@ def preprocess_image(image: Image.Image) -> Image.Image:
     )
 
     return image
-
     
 # ------------------ AZURE FACE HELPERS ------------------
 def detect_face_id(image_bytes: bytes) -> str | None:
@@ -142,6 +141,59 @@ def get_compreface_verification() -> "VerificationService | None":
 
     return _COMPRE_VERIFICATION_SERVICE
 
+
+
+
+# ------------------ AWS REKOGNITION HELPERS ------------------
+import boto3
+from botocore.exceptions import ClientError, NoCredentialsError
+from dotenv import load_dotenv
+load_dotenv()
+
+# AWS Rekognition configuration
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+
+def get_rekognition_client():
+    """
+    Initialize and return AWS Rekognition client.
+    """
+    try:
+        # Check if credentials are available
+        if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
+            logging.error("AWS credentials not found in environment variables")
+            logging.error("Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY")
+            return None
+        
+        rekognition = boto3.client(
+            'rekognition',
+            region_name=AWS_DEFAULT_REGION,
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY
+        )
+        
+        # Test credentials by making a simple call
+        # This will raise an exception if credentials are invalid
+        try:
+            rekognition.list_collections(MaxResults=1)
+            logging.info("AWS Rekognition client initialized successfully")
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'InvalidSignatureException':
+                logging.error("AWS credentials are invalid")
+                return None
+            # If it's just an access denied for list_collections, that's okay
+            # The credentials are valid, just no permission for this operation
+            logging.info("AWS credentials validated")
+        
+        return rekognition
+    except NoCredentialsError:
+        logging.error("AWS credentials not found")
+        return None
+    except Exception as e:
+        logging.error(f"Failed to initialize AWS Rekognition client: {e}")
+        return None
+
 # ------------------ HEALTH CHECK ------------------
 @app.route(route="ping")
 def ping(req: func.HttpRequest) -> func.HttpResponse:
@@ -149,7 +201,6 @@ def ping(req: func.HttpRequest) -> func.HttpResponse:
         "Face extraction service running",
         status_code=200
     )
-
 # ------------------ FACE EXTRACTION ------------------
 @app.route(route="extract_kyc", methods=["POST"])
 async def extract_kyc(req: func.HttpRequest) -> func.HttpResponse:
@@ -243,7 +294,7 @@ async def extract_kyc(req: func.HttpRequest) -> func.HttpResponse:
             f"Internal error: {str(e)}",
             status_code=500
         )
-
+    
 # ------------------ FACE COMPARISON ------------------
 @app.route(route="compare_faces", methods=["POST"])
 async def compare_faces(req: func.HttpRequest) -> func.HttpResponse:
@@ -619,4 +670,181 @@ async def compare_faces_compreface(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(
             f"Internal error: {str(e)}",
             status_code=500,
+        )
+
+
+
+
+
+
+
+
+# ------------------ AWS REKOGNITION FACE COMPARISON ------------------
+@app.route(route="verify_rekognition", methods=["POST"])
+async def verify_rekognition(req: func.HttpRequest) -> func.HttpResponse:
+    """
+    Face verification using AWS Rekognition CompareFaces API.
+    Expects:
+    - face_image: First image file (form-data) - source image
+    - id_image: Second image file (form-data) - target image
+    - similarity_threshold: Optional, default 80 (0-100)
+    
+    Returns JSON with verification results from AWS Rekognition.
+    """
+    headers = {
+        "Access-Control-Allow-Origin": "*",  # or "http://127.0.0.1:5500" for specific origin
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type"
+    }
+    
+    if req.method == "OPTIONS":
+        return func.HttpResponse(
+            status_code=200,
+            headers=headers
+        )
+    
+    try:
+        # ---------- Get both images ----------
+        face_file = req.files.get("face_image")
+        id_file = req.files.get("id_image")
+        
+        if not face_file or not id_file:
+            return func.HttpResponse(
+                json.dumps({
+                    "error": "Missing images. Provide 'face_image' and 'id_image' in form-data"
+                }),
+                mimetype="application/json",
+                status_code=400
+            )
+        
+        # ---------- Get parameters ----------
+        similarity_threshold = float(req.form.get("similarity_threshold", 80))
+        
+        # Validate threshold
+        if not 0 <= similarity_threshold <= 100:
+            return func.HttpResponse(
+                json.dumps({
+                    "error": "similarity_threshold must be between 0 and 100"
+                }),
+                mimetype="application/json",
+                status_code=400
+            )
+        
+        # ---------- Read image bytes ----------
+        face_bytes = face_file.stream.read()
+        id_bytes = id_file.stream.read()
+        
+        # ---------- Initialize Rekognition client ----------
+        rekognition = get_rekognition_client()
+        if not rekognition:
+            return func.HttpResponse(
+                json.dumps({
+                    "error": "AWS Rekognition not configured. Check AWS credentials in environment variables."
+                }),
+                mimetype="application/json",
+                status_code=500
+            )
+        
+        # ---------- Compare faces ----------
+        try:
+            response = rekognition.compare_faces(
+                SourceImage={'Bytes': face_bytes},
+                TargetImage={'Bytes': id_bytes},
+                SimilarityThreshold=similarity_threshold
+            )
+            
+            # ---------- Process results ----------
+            face_matches = response.get('FaceMatches', [])
+            unmatched_faces = response.get('UnmatchedFaces', [])
+            source_face = response.get('SourceImageFace', {})
+            
+            # Determine if there's a match
+            has_match = len(face_matches) > 0
+            
+            # Get best match if available
+            best_match = None
+            if face_matches:
+                best_match = max(face_matches, key=lambda x: x['Similarity'])
+            
+            # Build detailed results
+            match_details = []
+            for idx, match in enumerate(face_matches, start=1):
+                match_details.append({
+                    'match_number': idx,
+                    'similarity': round(match['Similarity'], 2),
+                    'confidence': round(match['Face']['Confidence'], 2),
+                    'bounding_box': match['Face']['BoundingBox']
+                })
+            
+            # Calculate conclusion
+            if has_match:
+                max_similarity = best_match['Similarity']
+                if max_similarity >= 95:
+                    conclusion = "Very strong match - same person"
+                elif max_similarity >= 90:
+                    conclusion = "Strong match - likely same person"
+                elif max_similarity >= similarity_threshold:
+                    conclusion = "Match found - manual review recommended"
+                else:
+                    conclusion = "No confident match"
+            else:
+                conclusion = "No matching faces found"
+            
+            # ---------- Response ----------
+            
+            return func.HttpResponse(
+                json.dumps({
+                    "success": True,
+                    "overall_match": has_match,
+                    "similarity_threshold": similarity_threshold,
+                    "conclusion": conclusion,
+                    "source_face_detected": source_face.get('Confidence', 0) > 0,
+                    "source_face_confidence": round(source_face.get('Confidence', 0), 2),
+                    "best_match": {
+                        'similarity': round(best_match['Similarity'], 2),
+                        'confidence': round(best_match['Face']['Confidence'], 2)
+                    } if best_match else None,
+                    "summary": {
+                        "total_matches": len(face_matches),
+                        "unmatched_faces": len(unmatched_faces),
+                        "faces_compared": 1
+                    },
+                    "match_details": match_details,
+                    "aws_raw_response": {
+                        "FaceMatches": face_matches,
+                        "UnmatchedFaces": unmatched_faces,
+                        "SourceImageFace": source_face
+                    }
+                }),
+                mimetype="application/json",
+                status_code=200,
+                headers=headers
+            )
+        
+            
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            error_message = e.response['Error']['Message']
+            
+            logging.error(f"AWS Rekognition error: {error_code} - {error_message}")
+            
+            return func.HttpResponse(
+                json.dumps({
+                    "error": f"AWS Rekognition error: {error_message}",
+                    "error_code": error_code
+                }),
+                mimetype="application/json",
+                status_code=400
+            )
+            
+    except Exception as e:
+        logging.exception("Unhandled error in verify_rekognition")
+        
+        return func.HttpResponse(
+            json.dumps({
+                "error": f"Internal error: {str(e)}"
+            }),
+            mimetype="application/json",
+            status_code=500,
+            headers=headers
         )
