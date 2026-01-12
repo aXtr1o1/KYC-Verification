@@ -515,7 +515,7 @@
                 formData.append('id_image', idFile);
                 formData.append('similarity_threshold', threshold);
 
-                const response = await fetch(`${apiUrl}/verify_rekognition`, {
+                const response = await fetch(`${apiUrl}/verify_rekognition?code=pFxdiD8ZrSqLnbf5ZIwmhTZZTI4yf0xH0xHIwWALB3ZsAzFuMmdDLw==`, {
                     method: 'POST',
                     body: formData
                 });
